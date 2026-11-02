@@ -1,0 +1,541 @@
+<title>RTEC TalkBoard</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="TalkBoard">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Lexend:wght@500;700&display=swap">
+<style>
+/* Layout: one-screen board. Sentence strip on top, category tabs, then a big symbol grid that fills the rest.
+   Button colors follow the Fitzgerald Key used on AAC boards. */
+:root {
+  --bg: #eef1f4;
+  --surface: #ffffff;
+  --ink: #1b2230;
+  --muted: #5b6577;
+  --line: #cfd6df;
+  --accent: #1f5fbf;
+  --accent-ink: #ffffff;
+  --focus: #ff9d00;
+  /* Fitzgerald Key */
+  --fk-pron: #fff1a6;   /* people & pronouns: yellow */
+  --fk-verb: #c9efc4;   /* actions: green */
+  --fk-adj: #cfe2ff;    /* describing: blue */
+  --fk-noun: #ffd9b8;   /* things: orange */
+  --fk-social: #ffd3e6; /* social words: pink */
+  --fk-q: #e5d6fb;      /* questions: purple */
+  --fk-misc: #ffffff;   /* little words: white */
+  --fk-neg: #ffc9c4;    /* no / stop: red */
+  --display: "Lexend", "Atkinson Hyperlegible", system-ui, sans-serif;
+  --body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12161d; --surface: #1c222c; --ink: #eef2f7; --muted: #9aa5b6; --line: #333c4a;
+  --accent: #6ea8ff; --accent-ink: #0c1420; --focus: #ffb53d;
+  --fk-pron: #5c5220; --fk-verb: #24502a; --fk-adj: #23405f; --fk-noun: #5e3a1c;
+  --fk-social: #5a2842; --fk-q: #3f2e60; --fk-misc: #2a313c; --fk-neg: #63292a;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #12161d; --surface: #1c222c; --ink: #eef2f7; --muted: #9aa5b6; --line: #333c4a;
+  --accent: #6ea8ff; --accent-ink: #0c1420; --focus: #ffb53d;
+  --fk-pron: #5c5220; --fk-verb: #24502a; --fk-adj: #23405f; --fk-noun: #5e3a1c;
+  --fk-social: #5a2842; --fk-q: #3f2e60; --fk-misc: #2a313c; --fk-neg: #63292a;
+  color-scheme: dark; }
+
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--body);
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  overflow: hidden;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 4px solid var(--focus); outline-offset: 2px; }
+
+.app {
+  height: 100%; display: grid; grid-template-rows: auto auto 1fr; gap: 10px;
+  padding-block: 10px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  box-sizing: border-box;
+}
+
+/* Sentence strip */
+.strip { display: grid; grid-template-columns: 1fr auto; gap: 10px; min-height: 0; }
+.sentence {
+  min-width: 0; background: var(--surface); border: 2px solid var(--line); border-radius: 14px;
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px; overflow-x: auto; min-height: 84px;
+}
+.sentence:empty::before { content: "Choose words to build a sentence"; color: var(--muted); font-size: 1.15rem; }
+.chip { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-width: 64px; padding: 4px 8px; border-radius: 10px; background: var(--chip, var(--fk-misc)); border: 1px solid var(--line); }
+.chip .s { font-size: 1.8rem; line-height: 1; }
+.chip .l { font-size: 1rem; font-weight: 700; }
+.actions { display: flex; gap: 8px; }
+.act {
+  border: none; border-radius: 14px; min-width: 96px; padding: 8px 12px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  font-weight: 700; font-size: 1.05rem; background: var(--surface); border: 2px solid var(--line);
+}
+.act .i { font-size: 1.7rem; line-height: 1; }
+.act.speak { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); min-width: 130px; font-size: 1.25rem; }
+
+/* Tabs */
+.tabs { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; align-items: stretch; }
+.tab {
+  flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 16px; min-height: 60px;
+  border-radius: 12px; border: 2px solid var(--line); background: var(--surface);
+  font-family: var(--display); font-weight: 500; font-size: 1.1rem;
+}
+.tab .s { font-size: 1.6rem; }
+.tab[aria-selected="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.tab.add { border-style: dashed; color: var(--muted); }
+.gear { margin-left: auto; flex: none; min-width: 60px; border-radius: 12px; border: 2px solid transparent;
+  background: transparent; color: var(--muted); font-size: .85rem; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.gear .i { font-size: 1.5rem; }
+
+/* Grid */
+.gridwrap { min-height: 0; position: relative; }
+.grid {
+  height: 100%; display: grid; gap: 10px;
+  grid-template-columns: repeat(var(--cols, 5), minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+}
+.cell {
+  position: relative; overflow: hidden; min-width: 0; min-height: 0;
+  border-radius: 16px; border: 2px solid color-mix(in srgb, var(--ink) 18%, transparent);
+  background: var(--cell, var(--fk-misc));
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 6px;
+  transition: transform .08s ease;
+}
+.cell:active, .cell.flash { transform: scale(.96); }
+.cell .s { font-size: clamp(1.8rem, calc(var(--sym, 1) * 6.2vmin), 5.5rem); line-height: 1.05; }
+.cell .l { font-weight: 700; font-size: clamp(1rem, 2.6vmin, 1.6rem); text-align: center; line-height: 1.1;
+  overflow-wrap: anywhere; }
+.cell.folder::after { content: ""; position: absolute; top: 0; right: 0; border-style: solid;
+  border-width: 0 26px 26px 0; border-color: transparent color-mix(in srgb, var(--ink) 35%, transparent) transparent transparent; }
+.cell .ring { position: absolute; inset: 0; pointer-events: none; border-radius: 14px;
+  background: conic-gradient(color-mix(in srgb, var(--accent) 45%, transparent) calc(var(--p, 0) * 1turn), transparent 0); opacity: .9; }
+.cell.empty { visibility: hidden; }
+.editing .cell { outline: 3px dashed var(--accent); outline-offset: -6px; }
+.cell.addcell { background: transparent; border-style: dashed; color: var(--muted); }
+
+.edit-banner { display: none; }
+.editing .edit-banner { display: flex; }
+.edit-banner { position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px)); z-index: 20;
+  background: var(--ink); color: var(--bg); border-radius: 999px; padding: 10px 10px 10px 20px; gap: 14px; align-items: center;
+  box-shadow: 0 6px 24px rgba(0,0,0,.25); font-weight: 700; max-width: calc(100% - 32px); }
+.edit-banner button { border: none; background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 10px 18px; font-weight: 700; }
+
+/* Panels */
+.scrim { position: fixed; inset: 0; background: rgba(10,14,20,.5); z-index: 30; display: flex; align-items: center; justify-content: center;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.panel { background: var(--surface); color: var(--ink); border-radius: 18px; width: min(560px, 100%); max-height: 100%; overflow: auto;
+  padding: 22px; box-sizing: border-box; display: flex; flex-direction: column; gap: 16px; -webkit-user-select: text; user-select: text; }
+.panel h2 { font-family: var(--display); margin: 0; font-size: 1.4rem; text-wrap: balance; }
+.panel p.note { margin: 0; color: var(--muted); font-size: .95rem; line-height: 1.45; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label, .field .lab { font-weight: 700; font-size: .95rem; }
+.field input[type=text], .field select { font: inherit; font-size: 1.05rem; padding: 10px 12px; border-radius: 10px; border: 2px solid var(--line); background: var(--bg); color: var(--ink); }
+.row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.row > .field { flex: 1 1 160px; min-width: 0; }
+.toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.toggle input { width: 26px; height: 26px; accent-color: var(--accent); }
+.range { display: flex; gap: 10px; align-items: center; }
+.range input { flex: 1; accent-color: var(--accent); }
+.range output { min-width: 4ch; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.sw { border: 2px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: .9rem; font-weight: 700; background: var(--c); }
+.sw[aria-pressed="true"] { outline: 3px solid var(--ink); outline-offset: 1px; }
+.btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.btn { border: 2px solid var(--line); background: var(--bg); border-radius: 10px; padding: 10px 16px; font-weight: 700; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.danger { color: #c62828; border-color: color-mix(in srgb, #c62828 40%, var(--line)); margin-right: auto; }
+.preview { display: flex; align-items: center; justify-content: center; gap: 4px; flex-direction: column; width: 120px; height: 110px;
+  border-radius: 14px; border: 2px solid var(--line); background: var(--pc, var(--fk-misc)); }
+.preview .s { font-size: 2.6rem; } .preview .l { font-weight: 700; }
+.toast { position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); z-index: 40;
+  background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 999px; font-weight: 700; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px; }
+.legend span { font-size: .8rem; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line); }
+
+@media (max-width: 700px) {
+  .strip { grid-template-columns: 1fr; }
+  .act { min-width: 0; flex: 1; }
+  .sentence { min-height: 64px; }
+}
+@media (prefers-reduced-motion: reduce) { .cell { transition: none; } }
+</style>
+
+<div class="app" id="app">
+  <div class="strip">
+    <div class="sentence" id="sentence" aria-live="polite"></div>
+    <div class="actions">
+      <button class="act speak" id="speakBtn"><span class="i">🔊</span>Speak</button>
+      <button class="act" id="backBtn"><span class="i">⌫</span>Delete</button>
+      <button class="act" id="clearBtn"><span class="i">✕</span>Clear</button>
+    </div>
+  </div>
+  <div class="tabs" id="tabs" role="tablist"></div>
+  <div class="gridwrap"><div class="grid" id="grid"></div></div>
+  <div class="edit-banner"><span>Editing: tap a button to change it. Hold a page tab to rename it.</span><button id="doneEdit">Done</button></div>
+</div>
+<div id="layer"></div>
+
+<script>
+(function () {
+  const TYPES = {
+    pron:   { name: "People",      v: "--fk-pron" },
+    verb:   { name: "Actions",     v: "--fk-verb" },
+    adj:    { name: "Describing",  v: "--fk-adj" },
+    noun:   { name: "Things",      v: "--fk-noun" },
+    social: { name: "Social",      v: "--fk-social" },
+    q:      { name: "Questions",   v: "--fk-q" },
+    neg:    { name: "No / Stop",   v: "--fk-neg" },
+    misc:   { name: "Little words",v: "--fk-misc" }
+  };
+  const uid = () => Math.random().toString(36).slice(2, 9);
+  const W = (symbol, label, type, extra) => Object.assign({ id: uid(), symbol, label, type }, extra || {});
+
+  function defaultBoards() {
+    return [
+      { id: "quick", name: "Quick", symbol: "⭐", items: [
+        W("👍","yes","social",{now:true}), W("👎","no","neg",{now:true}), W("🙋","help","verb",{now:true}),
+        W("✋","stop","neg",{now:true}), W("➕","more","adj"), W("✅","all done","social",{now:true}),
+        W("🙂","I","pron"), W("❤️","want","verb"), W("🚻","bathroom","noun",{say:"I need the bathroom", now:true}),
+        W("🥤","drink","noun"), W("😴","tired","adj"), W("🤕","it hurts","adj",{now:true}),
+        W("👋","hello","social",{now:true}), W("🙏","thank you","social",{now:true}), W("❓","what","q")
+      ]},
+      { id: "core", name: "Core words", symbol: "💬", items: [
+        W("🙂","I","pron"), W("👉","you","pron"), W("👦","he","pron"), W("👧","she","pron"), W("👥","we","pron"),
+        W("❤️","want","verb"), W("👀","see","verb"), W("🫴","get","verb"), W("🚶","go","verb"), W("🎮","play","verb"),
+        W("👍","like","verb"), W("✋","stop","neg"), W("🚫","not","neg"), W("➕","more","adj"), W("🔁","again","misc"),
+        W("📦","it","misc"), W("👇","this","misc"), W("📍","here","misc"), W("⬆️","up","misc"), W("⬇️","down","misc"),
+        W("➡️","in","misc"), W("⬅️","out","misc"), W("🤝","and","misc"), W("🙌","finished","adj")
+      ]},
+      { id: "feel", name: "Feelings", symbol: "😊", items: [
+        W("😀","happy","adj"), W("😢","sad","adj"), W("😠","mad","adj"), W("😨","scared","adj"),
+        W("😴","tired","adj"), W("🤒","sick","adj"), W("🤕","hurt","adj"), W("😕","confused","adj"),
+        W("😌","calm","adj"), W("🤩","excited","adj"), W("😣","frustrated","adj"), W("🥶","cold","adj"),
+        W("🥵","hot","adj"), W("🍽️","hungry","adj"), W("🙂","I feel","pron",{say:"I feel"})
+      ]},
+      { id: "people", name: "People", symbol: "👪", items: [
+        W("🙂","me","pron"), W("👩‍🏫","teacher","pron"), W("🧑‍⚕️","nurse","pron"), W("👩","mom","pron"),
+        W("👨","dad","pron"), W("🧒","friend","pron"), W("🧑‍🦽","aide","pron"), W("🗣️","speech teacher","pron"),
+        W("👵","grandma","pron"), W("👴","grandpa","pron"), W("🧑‍🤝‍🧑","class","pron"), W("🚌","bus driver","pron")
+      ]},
+      { id: "food", name: "Food & drink", symbol: "🍎", items: [
+        W("💧","water","noun"), W("🧃","juice","noun"), W("🥛","milk","noun"), W("🍎","apple","noun"),
+        W("🍌","banana","noun"), W("🍪","cookie","noun"), W("🍕","pizza","noun"), W("🥪","sandwich","noun"),
+        W("🍗","chicken","noun"), W("🍚","rice","noun"), W("🍝","pasta","noun"), W("🧀","crackers","noun"),
+        W("🥣","snack","noun"), W("🍴","lunch","noun"), W("🍽️","eat","verb"), W("🥤","drink","verb")
+      ]},
+      { id: "school", name: "School", symbol: "🏫", items: [
+        W("📚","read","verb"), W("✏️","write","verb"), W("🎨","art","noun"), W("🎵","music","noun"),
+        W("💻","computer","noun"), W("📱","iPad","noun"), W("🏀","gym","noun"), W("🌳","outside","noun"),
+        W("📺","video","noun"), W("🧩","puzzle","noun"), W("🔢","math","noun"), W("🚌","bus","noun"),
+        W("🏠","home","noun"), W("⏸️","break","noun",{say:"I need a break", now:true}), W("🔇","quiet","adj")
+      ]},
+      { id: "questions", name: "Questions", symbol: "❓", items: [
+        W("❓","what","q"), W("📍","where","q"), W("🕐","when","q"), W("🧑","who","q"), W("🤔","why","q"),
+        W("🔧","how","q"), W("❓","What is that?","q",{now:true}), W("🏠","When do I go home?","q",{now:true}),
+        W("🍴","Is it lunch time?","q",{now:true}), W("🔁","Can you say that again?","q",{now:true})
+      ]}
+    ];
+  }
+
+  const DEFAULT_SETTINGS = { cols: 5, dwell: false, dwellMs: 1200, speakEach: true, clearAfter: false, rate: 0.9, sym: 1, theme: "" };
+  const KEY = "rtec-talkboard-v1";
+  let state;
+  function load() {
+    try { const raw = localStorage.getItem(KEY); if (raw) { const s = JSON.parse(raw);
+      if (s && Array.isArray(s.boards)) return { boards: s.boards, settings: Object.assign({}, DEFAULT_SETTINGS, s.settings), tab: s.tab }; } } catch (e) {}
+    return { boards: defaultBoards(), settings: Object.assign({}, DEFAULT_SETTINGS), tab: "quick" };
+  }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+  state = load();
+
+  let sentence = [];
+  let editing = false;
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" })[c]);
+  const color = (t) => `var(${(TYPES[t] || TYPES.misc).v})`;
+
+  /* Speech */
+  function speak(text) {
+    if (!text || !("speechSynthesis" in window)) return;
+    try {
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = state.settings.rate; u.lang = "en-US";
+      speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+  function sentenceText() { return sentence.map(w => w.say || w.label).join(" "); }
+
+  /* Render */
+  function applySettings() {
+    const s = state.settings;
+    document.documentElement.style.setProperty("--cols", s.cols);
+    document.documentElement.style.setProperty("--sym", s.sym);
+    if (s.theme) document.documentElement.setAttribute("data-theme", s.theme); else document.documentElement.removeAttribute("data-theme");
+  }
+  function renderSentence() {
+    $("sentence").innerHTML = sentence.map(w =>
+      `<span class="chip" style="--chip:${color(w.type)}"><span class="s">${esc(w.symbol)}</span><span class="l">${esc(w.label)}</span></span>`).join("");
+    const el = $("sentence"); el.scrollLeft = el.scrollWidth;
+  }
+  function currentBoard() { return state.boards.find(b => b.id === state.tab) || state.boards[0]; }
+  function renderTabs() {
+    const cur = currentBoard();
+    let h = state.boards.map(b =>
+      `<button class="tab" role="tab" data-tab="${b.id}" aria-selected="${b.id === cur.id}"><span class="s">${esc(b.symbol)}</span>${esc(b.name)}</button>`).join("");
+    if (editing) h += `<button class="tab add" data-addtab="1">＋ New page</button>`;
+    h += `<button class="gear" id="gear" aria-label="Adult settings, tap 3 times"><span class="i">⚙️</span><span id="gearHint">Adults</span></button>`;
+    $("tabs").innerHTML = h;
+  }
+  function renderGrid() {
+    const b = currentBoard();
+    const cols = state.settings.cols;
+    let items = b.items.slice();
+    let h = items.map(it =>
+      `<button class="cell" data-id="${it.id}" style="--cell:${color(it.type)}"><span class="s">${esc(it.symbol)}</span><span class="l">${esc(it.label)}</span><span class="ring"></span></button>`).join("");
+    let count = items.length;
+    if (editing) { h += `<button class="cell addcell" data-add="1"><span class="s">＋</span><span class="l">Add button</span></button>`; count++; }
+    const rows = Math.max(1, Math.ceil(count / cols));
+    const pad = rows * cols - count;
+    for (let i = 0; i < pad; i++) h += `<div class="cell empty" aria-hidden="true"></div>`;
+    const grid = $("grid");
+    grid.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
+    grid.innerHTML = h;
+  }
+  function renderAll() {
+    applySettings();
+    $("app").classList.toggle("editing", editing);
+    renderTabs(); renderGrid(); renderSentence();
+  }
+
+  /* Selection */
+  let lastDwell = 0;
+  function activate(el) {
+    if (el.dataset.tab) { state.tab = el.dataset.tab; save(); renderTabs(); renderGrid(); return; }
+    if (el.dataset.addtab) { openBoardEditor(null); return; }
+    if (el.dataset.add) { openItemEditor(null); return; }
+    if (el.id === "gear") { gearTap(); return; }
+    if (el.id === "speakBtn") { speak(sentenceText()); if (state.settings.clearAfter) { sentence = []; renderSentence(); } return; }
+    if (el.id === "backBtn") { sentence.pop(); renderSentence(); return; }
+    if (el.id === "clearBtn") { sentence = []; renderSentence(); return; }
+    if (el.id === "doneEdit") { editing = false; renderAll(); return; }
+    const id = el.dataset.id; if (!id) return;
+    const item = currentBoard().items.find(i => i.id === id); if (!item) return;
+    if (editing) { openItemEditor(item); return; }
+    el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 150);
+    if (item.now) { speak(item.say || item.label); return; }
+    sentence.push(item); renderSentence();
+    if (state.settings.speakEach) speak(item.say || item.label);
+  }
+  $("app").addEventListener("click", (e) => {
+    const el = e.target.closest("button"); if (!el) return;
+    if (Date.now() - lastDwell < 700) return; // dwell already selected it
+    activate(el);
+  });
+
+  /* Optional in-app dwell: hold the pointer (gaze) on a button to select it */
+  let dwellEl = null, dwellStart = 0, raf = 0;
+  function stopDwell() { if (dwellEl) dwellEl.style.removeProperty("--p"); dwellEl = null; cancelAnimationFrame(raf); }
+  function tick() {
+    if (!dwellEl) return;
+    const p = Math.min(1, (performance.now() - dwellStart) / state.settings.dwellMs);
+    dwellEl.style.setProperty("--p", p);
+    if (p >= 1) { const el = dwellEl; stopDwell(); lastDwell = Date.now(); activate(el); return; }
+    raf = requestAnimationFrame(tick);
+  }
+  $("app").addEventListener("pointerover", (e) => {
+    if (!state.settings.dwell || editing) return;
+    const el = e.target.closest("button"); if (!el || el === dwellEl || el.id === "gear") return;
+    stopDwell(); dwellEl = el; dwellStart = performance.now(); raf = requestAnimationFrame(tick);
+  });
+  $("app").addEventListener("pointerout", (e) => {
+    if (!dwellEl) return;
+    const to = e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest("button");
+    if (to !== dwellEl) stopDwell();
+  });
+
+  /* Adult lock: three taps on the gear within 2 seconds */
+  let gearTaps = 0, gearTimer = 0;
+  function gearTap() {
+    gearTaps++; clearTimeout(gearTimer);
+    const hint = $("gearHint");
+    if (gearTaps >= 3) { gearTaps = 0; if (hint) hint.textContent = "Adults"; openSettings(); return; }
+    if (hint) hint.textContent = `${3 - gearTaps} more`;
+    gearTimer = setTimeout(() => { gearTaps = 0; const h = $("gearHint"); if (h) h.textContent = "Adults"; }, 2000);
+  }
+
+  /* Panels */
+  function closePanel() { $("layer").innerHTML = ""; }
+  function toast(msg) {
+    const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t);
+    setTimeout(() => t.remove(), 1800);
+  }
+  function panel(html) {
+    $("layer").innerHTML = `<div class="scrim" id="scrim"><div class="panel" role="dialog" aria-modal="true">${html}</div></div>`;
+    $("scrim").addEventListener("click", (e) => { if (e.target.id === "scrim") closePanel(); });
+  }
+
+  function openSettings() {
+    const s = state.settings;
+    panel(`
+      <h2>Board settings</h2>
+      <p class="note">These settings are saved on this iPad. If the student uses AssistiveTouch Dwell Control with the eye tracker, leave “Dwell inside the app” off so a button is not selected twice.</p>
+      <div class="field"><span class="lab">Buttons per row</span>
+        <div class="range"><input type="range" id="sCols" min="2" max="8" step="1" value="${s.cols}"><output id="oCols">${s.cols}</output></div></div>
+      <div class="field"><span class="lab">Symbol size</span>
+        <div class="range"><input type="range" id="sSym" min="0.6" max="1.6" step="0.1" value="${s.sym}"><output id="oSym">${s.sym}×</output></div></div>
+      <div class="toggle"><label for="sDwell">Dwell inside the app (look at a button to choose it)</label><input type="checkbox" id="sDwell" ${s.dwell ? "checked" : ""}></div>
+      <div class="field"><span class="lab">Dwell time</span>
+        <div class="range"><input type="range" id="sDwellMs" min="500" max="3000" step="100" value="${s.dwellMs}"><output id="oDwellMs">${(s.dwellMs/1000).toFixed(1)}s</output></div></div>
+      <div class="toggle"><label for="sSpeakEach">Say each word when it is chosen</label><input type="checkbox" id="sSpeakEach" ${s.speakEach ? "checked" : ""}></div>
+      <div class="toggle"><label for="sClear">Clear the sentence after Speak</label><input type="checkbox" id="sClear" ${s.clearAfter ? "checked" : ""}></div>
+      <div class="field"><span class="lab">Voice speed</span>
+        <div class="range"><input type="range" id="sRate" min="0.5" max="1.4" step="0.05" value="${s.rate}"><output id="oRate">${s.rate}</output></div></div>
+      <div class="field"><label for="sTheme">Colors</label>
+        <select id="sTheme"><option value="">Match the iPad</option><option value="light" ${s.theme==="light"?"selected":""}>Light</option><option value="dark" ${s.theme==="dark"?"selected":""}>Dark</option></select></div>
+      <div class="field"><span class="lab">Color key (Fitzgerald)</span>
+        <div class="legend">${Object.entries(TYPES).map(([k,t]) => `<span style="background:${color(k)}">${t.name}</span>`).join("")}</div></div>
+      <div class="btns">
+        <button class="btn danger" id="sReset">Reset all boards</button>
+        <button class="btn" id="sEdit">Edit buttons</button>
+        <button class="btn primary" id="sClose">Done</button>
+      </div>`);
+    const bind = (id, out, fmt, key, num) => {
+      $(id).addEventListener("input", (e) => { const v = num ? Number(e.target.value) : e.target.value;
+        state.settings[key] = v; if (out) $(out).textContent = fmt(v); save(); applySettings(); renderGrid(); });
+    };
+    bind("sCols", "oCols", v => v, "cols", true);
+    bind("sSym", "oSym", v => v + "×", "sym", true);
+    bind("sDwellMs", "oDwellMs", v => (v/1000).toFixed(1) + "s", "dwellMs", true);
+    bind("sRate", "oRate", v => v, "rate", true);
+    bind("sTheme", null, v => v, "theme", false);
+    $("sDwell").addEventListener("change", e => { state.settings.dwell = e.target.checked; save(); });
+    $("sSpeakEach").addEventListener("change", e => { state.settings.speakEach = e.target.checked; save(); });
+    $("sClear").addEventListener("change", e => { state.settings.clearAfter = e.target.checked; save(); });
+    $("sClose").addEventListener("click", closePanel);
+    $("sEdit").addEventListener("click", () => { closePanel(); editing = true; renderAll(); });
+    let armed = false;
+    $("sReset").addEventListener("click", (e) => {
+      if (!armed) { armed = true; e.target.textContent = "Tap again to reset"; return; }
+      state = { boards: defaultBoards(), settings: Object.assign({}, DEFAULT_SETTINGS), tab: "quick" };
+      save(); closePanel(); renderAll(); toast("Boards reset");
+    });
+  }
+
+  function typeSwatches(sel) {
+    return `<div class="swatches" id="types">${Object.entries(TYPES).map(([k,t]) =>
+      `<button type="button" class="sw" data-type="${k}" style="--c:${color(k)}" aria-pressed="${k===sel}">${t.name}</button>`).join("")}</div>`;
+  }
+
+  function openItemEditor(item) {
+    const isNew = !item;
+    const it = item ? Object.assign({}, item) : { id: uid(), symbol: "⭐", label: "", type: "noun", say: "", now: false };
+    panel(`
+      <h2>${isNew ? "Add a button" : "Edit button"}</h2>
+      <div class="row">
+        <div class="preview" id="pv" style="--pc:${color(it.type)}"><span class="s" id="pvS">${esc(it.symbol)}</span><span class="l" id="pvL">${esc(it.label || "word")}</span></div>
+        <div class="field"><label for="eSym">Symbol</label><input type="text" id="eSym" value="${esc(it.symbol)}" maxlength="8">
+          <p class="note">Use an emoji or a short letter or number. On iPad, tap the 🌐 or 😀 key to pick an emoji.</p></div>
+      </div>
+      <div class="field"><label for="eLabel">Word on the button</label><input type="text" id="eLabel" value="${esc(it.label)}" placeholder="e.g. swing"></div>
+      <div class="field"><label for="eSay">What the voice says (optional)</label><input type="text" id="eSay" value="${esc(it.say || "")}" placeholder="Leave empty to say the word"></div>
+      <div class="field"><span class="lab">Word type</span>${typeSwatches(it.type)}</div>
+      <div class="toggle"><label for="eNow">Speak right away instead of adding to the sentence</label><input type="checkbox" id="eNow" ${it.now ? "checked" : ""}></div>
+      <div class="field"><label for="eBoard">Page</label>
+        <select id="eBoard">${state.boards.map(b => `<option value="${b.id}" ${b.id===currentBoard().id?"selected":""}>${esc(b.name)}</option>`).join("")}</select></div>
+      <div class="btns">
+        ${isNew ? "" : `<button class="btn danger" id="eDel">Delete</button>`}
+        ${isNew ? "" : `<button class="btn" id="eLeft">Move earlier</button>`}
+        <button class="btn" id="eCancel">Cancel</button>
+        <button class="btn primary" id="eSave">Save</button>
+      </div>`);
+    const upd = () => { $("pvS").textContent = $("eSym").value || "⭐"; $("pvL").textContent = $("eLabel").value || "word"; };
+    $("eSym").addEventListener("input", upd); $("eLabel").addEventListener("input", upd);
+    $("types").addEventListener("click", (e) => { const b = e.target.closest(".sw"); if (!b) return;
+      it.type = b.dataset.type; $("types").querySelectorAll(".sw").forEach(x => x.setAttribute("aria-pressed", x === b));
+      $("pv").style.setProperty("--pc", color(it.type)); });
+    $("eCancel").addEventListener("click", closePanel);
+    $("eSave").addEventListener("click", () => {
+      const label = $("eLabel").value.trim();
+      if (!label) { $("eLabel").focus(); $("eLabel").placeholder = "Type a word first"; return; }
+      Object.assign(it, { symbol: $("eSym").value.trim() || "⭐", label, say: $("eSay").value.trim(), now: $("eNow").checked });
+      const target = state.boards.find(b => b.id === $("eBoard").value) || currentBoard();
+      state.boards.forEach(b => { b.items = b.items.filter(x => x.id !== it.id); });
+      if (!isNew && target === currentBoard()) {
+        const idx = item ? currentBoardIndexOf(item.id) : -1;
+        if (idx >= 0) target.items.splice(idx, 0, it); else target.items.push(it);
+      } else target.items.push(it);
+      save(); closePanel(); renderGrid(); toast(isNew ? "Button added" : "Button saved");
+    });
+    if (!isNew) {
+      let armed = false;
+      $("eDel").addEventListener("click", (e) => {
+        if (!armed) { armed = true; e.target.textContent = "Tap again to delete"; return; }
+        currentBoard().items = currentBoard().items.filter(x => x.id !== item.id);
+        save(); closePanel(); renderGrid(); toast("Button deleted");
+      });
+      $("eLeft").addEventListener("click", () => {
+        const arr = currentBoard().items; const i = arr.findIndex(x => x.id === item.id);
+        if (i > 0) { [arr[i-1], arr[i]] = [arr[i], arr[i-1]]; save(); renderGrid(); }
+      });
+    }
+  }
+  // Remember the original position so editing a button keeps its place.
+  const origIndex = {};
+  function currentBoardIndexOf(id) { return origIndex[id] ?? -1; }
+  const _openItem = openItemEditor;
+  openItemEditor = function (item) { if (item) origIndex[item.id] = currentBoard().items.findIndex(x => x.id === item.id); _openItem(item); };
+
+  function openBoardEditor() {
+    panel(`
+      <h2>New page</h2>
+      <div class="row">
+        <div class="field" style="flex:0 1 110px"><label for="bSym">Symbol</label><input type="text" id="bSym" value="📁" maxlength="8"></div>
+        <div class="field"><label for="bName">Page name</label><input type="text" id="bName" placeholder="e.g. Recess"></div>
+      </div>
+      <div class="btns"><button class="btn" id="bCancel">Cancel</button><button class="btn primary" id="bSave">Create page</button></div>`);
+    $("bCancel").addEventListener("click", closePanel);
+    $("bSave").addEventListener("click", () => {
+      const name = $("bName").value.trim(); if (!name) { $("bName").focus(); return; }
+      const b = { id: uid(), name, symbol: $("bSym").value.trim() || "📁", items: [] };
+      state.boards.push(b); state.tab = b.id; save(); closePanel(); renderAll(); toast("Page created");
+    });
+  }
+
+  // Long-press a tab while editing to rename or delete it
+  let pressT = 0;
+  $("tabs").addEventListener("pointerdown", (e) => {
+    if (!editing) return; const t = e.target.closest(".tab[data-tab]"); if (!t) return;
+    pressT = setTimeout(() => openTabMenu(t.dataset.tab), 700);
+  });
+  ["pointerup","pointerleave","pointercancel"].forEach(ev => $("tabs").addEventListener(ev, () => clearTimeout(pressT)));
+  function openTabMenu(id) {
+    const b = state.boards.find(x => x.id === id); if (!b) return;
+    panel(`
+      <h2>Edit page</h2>
+      <div class="row">
+        <div class="field" style="flex:0 1 110px"><label for="tSym">Symbol</label><input type="text" id="tSym" value="${esc(b.symbol)}" maxlength="8"></div>
+        <div class="field"><label for="tName">Page name</label><input type="text" id="tName" value="${esc(b.name)}"></div>
+      </div>
+      <div class="btns">${state.boards.length > 1 ? `<button class="btn danger" id="tDel">Delete page</button>` : ""}
+        <button class="btn" id="tCancel">Cancel</button><button class="btn primary" id="tSave">Save</button></div>`);
+    $("tCancel").addEventListener("click", closePanel);
+    $("tSave").addEventListener("click", () => { b.name = $("tName").value.trim() || b.name; b.symbol = $("tSym").value.trim() || b.symbol; save(); closePanel(); renderTabs(); });
+    const del = $("tDel"); let armed = false;
+    if (del) del.addEventListener("click", () => {
+      if (!armed) { armed = true; del.textContent = "Tap again to delete"; return; }
+      state.boards = state.boards.filter(x => x.id !== id); state.tab = state.boards[0].id; save(); closePanel(); renderAll();
+    });
+  }
+
+  renderAll();
+})();
+</script>
